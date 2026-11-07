@@ -103,9 +103,11 @@ rules:
     tags: [shield]
     cooldown: 300
 
+  # OBS: ASUS roamast loggar vanliga roaming-händelser som "emerg", därför undantas den.
   - name: allvarliga-fel
     severity: crit
-    title: 'Kritiskt fel i routern ({program})'
+    exclude: '^(roamast|hostapd|wlceventd|crond|dnsmasq-dhcp):'
+    title: 'Kritiskt fel på {hostname} ({program})'
     priority: high
     tags: [boom]
     cooldown: 300

@@ -33,6 +33,20 @@ test('kritisk nivå larmar', () => {
   assert.deepEqual(fire('<2>Nov  7 19:01:02 RT-AX58U kernel: something bad'), ['allvarliga-fel']);
 });
 
+test('roamast på emerg ger inget larm (riktig logg från RP-AX58)', () => {
+  assert.deepEqual(fire('<24>Nov  7 19:53:28 RP-AX58-1DF0 roamast: [EXAP]Deauth old sta in 1 1: 9A:61:6C:C3:3D:38'), []);
+  assert.deepEqual(fire('<24>Nov  7 19:53:28 RP-AX58-1DF0 roamast: wl1.1: disconnect weak signal strength station [9a:61]'), []);
+});
+
+test('riktiga vardagsrader ger inget larm', () => {
+  for (const l of [
+    '<30>Nov  7 19:53:27 RT-AX58U dnsmasq-dhcp[7779]: DHCPACK(br0) 10.0.0.99 9a:61:6c:c3:3d:38 iPhone',
+    '<30>Nov  7 19:53:27 RT-AX58U crond[2066]: USER jeth pid 416 cmd check_wgc_ep',
+    '<29>Nov  7 19:53:27 RT-AX58U wlceventd: wlceventd_proc_event(722): eth3: Assoc 9A:61:6C:C3:3D:38, status: Successful (0), rssi:-60',
+    '<28>Nov  7 19:50:12 RT-AX58U miniupnpd[5613]: HTTP Connection from 10.0.0.47 closed unexpectedly',
+  ]) assert.deepEqual(fire(l), [], l);
+});
+
 test('cooldown och mallar', () => {
   let t = 0;
   const engine = new RuleEngine(
