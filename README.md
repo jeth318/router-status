@@ -24,7 +24,9 @@ docker compose up -d --build
 2. **Caddy (med lösenord framför hela sidan):**
    ```
    asuslog.jtdev.se {
-   	basic_auth {
+   	# sw.js och manifestet hämtas av webbläsaren utan inloggning, och innehåller inget hemligt
+   	@private not path /sw.js /manifest.webmanifest
+   	basic_auth @private {
    		jesper <bcrypt-hash från: docker exec proxy-caddy-1 caddy hash-password>
    	}
    	reverse_proxy router-status:8080

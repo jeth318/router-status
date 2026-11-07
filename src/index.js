@@ -102,7 +102,8 @@ const LOCK_MS = 15 * 60 * 1000;
 function authorized(req) {
   if (!accessToken) return false; // utan ACCESS_TOKEN är allt utom hälsokollen avstängt
   if (Date.now() < fails.until) return false;
-  const given = Buffer.from((req.headers.authorization ?? '').replace(/^Bearer /, ''));
+  // Egen header, så att den inte krockar med Caddys basic auth (Authorization).
+  const given = Buffer.from(String(req.headers['x-access-token'] ?? ''));
   const want = Buffer.from(accessToken);
   const ok = given.length === want.length && timingSafeEqual(given, want);
   if (ok) {
@@ -146,7 +147,7 @@ if (httpPort) {
         }
         if (req.method === 'GET' && path === '/health') {
           // Utan åtkomstkod avslöjas ingenting om nätverket eller reglerna.
-          const detail = req.headers.authorization && authorized(req);
+          const detail = req.headers['x-access-token'] && authorized(req);
           const body = detail ? { ok: true, ...stats, devices: store.list().length, rules: engine.rules.map((r) => r.name) } : { ok: true };
           return send(200, JSON.stringify(body), 'application/json');
         }

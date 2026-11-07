@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="manifest" href="/manifest.webmanifest">
+<link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
 <title>Router Status</title>
 <style>
   body{font:16px system-ui;margin:0;padding:24px;max-width:480px;margin:auto;background:#fff;color:#111}
@@ -25,7 +25,7 @@
 const $ = (id) => document.getElementById(id);
 const say = (t) => ($('msg').textContent = t);
 $('token').value = localStorage.getItem('token') ?? '';
-const auth = () => { localStorage.setItem('token', $('token').value); return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + $('token').value }; };
+const auth = () => { localStorage.setItem('token', $('token').value); return { 'Content-Type': 'application/json', 'X-Access-Token': $('token').value }; };
 const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 async function reg() {
