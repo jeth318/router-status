@@ -13,7 +13,8 @@ export function severityValue(name) {
   return i === -1 ? 7 : i;
 }
 
-const RFC3164 = /^(?:([A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})\s+)?(?:(\S+)\s+)?([^\s:\[]+)(?:\[(\d+)\])?:\s?(.*)$/s;
+// Programnamnet får innehålla mellanslag, eftersom ASUS loggar t.ex. "WAN Connection:" och "Samba Server:".
+const RFC3164 = /^(?:([A-Z][a-z]{2}\s+\d{1,2}\s\d{2}:\d{2}:\d{2})\s+)?(?:([^\s:]+)\s+)?([^:\[\]]{1,40}?)(?:\[(\d+)\])?:\s?(.*)$/s;
 const RFC5424 = /^1\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(-|\[.*?\])\s?(.*)$/s;
 
 export function parseSyslog(raw, receivedAt = new Date()) {
@@ -57,4 +58,10 @@ export function parseSyslog(raw, receivedAt = new Date()) {
   }
 
   return { ...base, timestamp: null, hostname: null, program: null, pid: null, message: rest };
+}
+
+// DDNS-klienten (inadyn) loggar hela requesten inklusive Authorization: Basic <hemlighet>.
+// Den får aldrig hamna i logs.jtdev.se eller i en notis.
+export function redact(text) {
+  return text.replace(/(Authorization:\s*Basic\s+)\S+/gi, '$1[redacted]');
 }

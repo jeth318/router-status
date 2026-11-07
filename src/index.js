@@ -2,7 +2,8 @@ import dgram from 'node:dgram';
 import net from 'node:net';
 import http from 'node:http';
 import { loadConfig } from './config.js';
-import { parseSyslog } from './parse.js';
+import { parseSyslog, redact } from './parse.js';
+import { Watchdog } from './watchdog.js';
 import { RuleEngine } from './rules.js';
 import { createNotifier } from './notifiers.js';
 import { createForwarder } from './forwarders.js';
@@ -17,11 +18,18 @@ const store = new SubscriptionStore(process.env.SUBSCRIPTIONS_FILE ?? 'data/subs
 const notify = createNotifier(config.notify, store);
 const forwarder = createForwarder(config.forward);
 
+const watchdog = config.watchdog?.enabled
+  ? new Watchdog({ host: config.watchdog.host, maxSilenceSeconds: config.watchdog.maxSilenceSeconds ?? 300 })
+  : null;
+
 const stats = { received: 0, forwarded: 0, forwardErrors: 0, notified: 0, notifyErrors: 0, startedAt: new Date() };
 const recent = [];
 
 async function handle(raw) {
   const entry = parseSyslog(raw);
+  entry.raw = redact(entry.raw);
+  entry.message = redact(entry.message);
+  watchdog?.seen(entry);
   stats.received++;
   recent.push(entry.raw);
   if (recent.length > 50) recent.shift();
@@ -59,6 +67,31 @@ async function handle(raw) {
       console.error(`[notis] ${n.rule} misslyckades: ${err.message}`);
     }
   }
+}
+
+if (watchdog) {
+  // Loggen går via internet till VPS:en. Tystnad betyder därför att routern eller internetlinjen är nere.
+  setInterval(async () => {
+    for (const ev of watchdog.check()) {
+      const n = {
+        rule: 'watchdog',
+        title: ev.type === 'silent' ? (config.watchdog.silentTitle ?? 'Routern är tyst') : (config.watchdog.backTitle ?? 'Routern pratar igen'),
+        body: ev.type === 'silent'
+          ? `Ingen logg på ${Math.round(ev.seconds / 60)} min. Internet eller routern kan vara nere.`
+          : `Tillbaka efter ${Math.round(ev.seconds / 60)} min tystnad.`,
+        priority: ev.type === 'silent' ? 'urgent' : 'default',
+        tags: [],
+      };
+      try {
+        await notify(n);
+        stats.notified++;
+        console.log(`[notis] watchdog: ${n.title}`);
+      } catch (err) {
+        stats.notifyErrors++;
+        console.error(`[notis] watchdog misslyckades: ${err.message}`);
+      }
+    }
+  }, 30_000).unref();
 }
 
 const { host, udpPort, tcpPort, httpPort } = config.listen;

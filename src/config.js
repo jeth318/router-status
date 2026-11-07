@@ -21,6 +21,7 @@ export function loadConfig(path) {
     stdout: cfg.stdout ?? true,
     notify: cfg.notify ?? { type: 'webpush' },
     forward: cfg.forward ?? { type: 'none' },
+    watchdog: cfg.watchdog ?? { enabled: false },
     rules: cfg.rules ?? [],
   };
 }

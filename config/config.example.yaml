@@ -41,7 +41,7 @@ forward:
   http:
     url: ${FORWARD_HTTP_URL:-}
 
-# Regler. Matchas mot meddelandet (regex, skiftlägesokänsligt).
+# Regelreferens:
 #   match:    regex mot meddelandet; namngivna grupper (?<ip>...) kan användas i title/body som {ip}
 #   exclude:  regex som stoppar matchning
 #   program:  regex mot programnamnet (t.ex. dropbear, kernel, dnsmasq-dhcp)
@@ -50,21 +50,42 @@ forward:
 #   cooldown: sekunder innan samma regel får skicka igen (standard 60)
 #   enabled:  false för att stänga av
 # I title/body finns även {message}, {program}, {hostname}, {level}, {raw}.
+# Dödmansvakt. Loggen färdas över internet till VPS:en, så när WAN går ner kommer INGA
+# rader fram (UDP buffras inte). Tystnad är därför den enda signalen om att internet är nere.
+# Huvudroutern loggar ett cron-jobb varje minut, så några minuters tystnad är onormalt.
+watchdog:
+  enabled: true
+  host: '^RT-AX58U'          # regex mot hostname; tom = vilken källa som helst
+  maxSilenceSeconds: 300
+
+# Regler. Matchas mot "program: meddelande" (regex, skiftlägesokänsligt). Se kommentarerna ovan.
 rules:
+  # Kommer bara fram om routern har en reservlinje; annars hjälper dödmansvakten.
   - name: wan-nere
-    match: 'WAN(\(\d\))?_?Connection:.*(disconnect|link down|did not function|cable.*unplugged|lost)'
+    match: 'WAN[ _]Connection:.*(disconnect|did not function|unplugged|lost)'
     title: 'Internet nere'
     body: '{message}'
     priority: urgent
     tags: [rotating_light]
     cooldown: 300
 
+  # Loggas när internet kommit tillbaka (då kommer också de köade raderna igenom).
   - name: wan-uppe
-    match: 'WAN(\(\d\))?_?Connection:.*(restored|link up|connected)'
-    exclude: 'disconnect'
+    match: 'WAN[ _]Connection:.*restored'
     title: 'Internet tillbaka'
+    body: 'WAN återställt på {hostname}'
     priority: default
     tags: [white_check_mark]
+    cooldown: 120
+
+  # Ny publik IP efter att WAN återansluts (inadyn uppdaterar DDNS).
+  - name: ny-publik-ip
+    program: '^inadyn$'
+    match: 'Update forced for alias \S+, new IP# (?<ip>\S+)'
+    title: 'Ny publik IP-adress'
+    body: '{ip}'
+    priority: low
+    tags: [globe_with_meridians]
     cooldown: 60
 
   - name: misslyckad-inloggning
