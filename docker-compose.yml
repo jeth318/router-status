@@ -21,13 +21,18 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
-    # Om du vill använda forward.type=victorialogs, anslut till logging-nätverket:
-    # networks: [default, logging]
+    networks:
+      - default
+      - proxy   # så att Caddy når appen som router-status:8080
+      # - logging  # om du använder forward.type=victorialogs
 
-# networks:
-#   logging:
-#     external: true
-#     name: logging_default
+networks:
+  proxy:
+    external: true
+    name: proxy
+  # logging:
+  #   external: true
+  #   name: logging_default
 
 volumes:
   subscriptions:
