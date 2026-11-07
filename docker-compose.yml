@@ -17,10 +17,10 @@ services:
       # Så att containern är lätt att hitta i Dozzle/Vector.
       app: router-status
     logging:
-      driver: json-file
+      driver: local   # samma som övriga appar på VPS:en
       options:
-        max-size: "20m"
-        max-file: "5"
+        max-size: "10m"
+        max-file: "3"
     networks:
       - default
       - proxy   # så att Caddy når appen som router-status:8080
