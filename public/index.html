@@ -36,7 +36,9 @@ $('on').onclick = async () => {
   try {
     const r = await reg();
     if ((await Notification.requestPermission()) !== 'granted') return say('Notiser nekades i webbläsaren.');
-    const { publicKey } = await (await fetch('/api/vapid-key')).json();
+    const keyRes = await fetch('/api/vapid-key', { headers: auth() });
+    if (!keyRes.ok) return say('Fel åtkomstkod eller för många försök.');
+    const { publicKey } = await keyRes.json();
     const sub = await (await navigator.serviceWorker.ready).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) });
     const res = await fetch('/api/subscribe', { method: 'POST', headers: auth(), body: JSON.stringify(sub) });
     say(res.ok ? 'Klart! Den här enheten får nu notiser.' : 'Fel: ' + (await res.text()));

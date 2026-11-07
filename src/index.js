@@ -94,11 +94,25 @@ const STATIC = {
 const publicDir = new URL('../public/', import.meta.url);
 const accessToken = process.env.ACCESS_TOKEN ?? '';
 
+// Spärr mot gissning: efter 5 felaktiga koder låses alla försök i 15 minuter.
+const fails = { count: 0, until: 0 };
+const MAX_FAILS = 5;
+const LOCK_MS = 15 * 60 * 1000;
+
 function authorized(req) {
-  if (!accessToken) return false; // utan ACCESS_TOKEN är skrivande endpoints avstängda
+  if (!accessToken) return false; // utan ACCESS_TOKEN är allt utom hälsokollen avstängt
+  if (Date.now() < fails.until) return false;
   const given = Buffer.from((req.headers.authorization ?? '').replace(/^Bearer /, ''));
   const want = Buffer.from(accessToken);
-  return given.length === want.length && timingSafeEqual(given, want);
+  const ok = given.length === want.length && timingSafeEqual(given, want);
+  if (ok) {
+    fails.count = 0;
+  } else if (++fails.count >= MAX_FAILS) {
+    fails.until = Date.now() + LOCK_MS;
+    fails.count = 0;
+    console.error('[auth] för många felaktiga försök, låst i 15 minuter');
+  }
+  return ok;
 }
 
 async function readJson(req) {
@@ -114,7 +128,14 @@ if (httpPort) {
   http
     .createServer(async (req, res) => {
       const send = (code, body, type = 'text/plain; charset=utf-8') => {
-        res.writeHead(code, { 'Content-Type': type });
+        res.writeHead(code, {
+          'Content-Type': type,
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'Referrer-Policy': 'no-referrer',
+          'Content-Security-Policy': "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'none'",
+        });
         res.end(body);
       };
       const path = req.url.split('?')[0];
@@ -124,9 +145,13 @@ if (httpPort) {
           return send(200, fs.readFileSync(new URL(file, publicDir)), type);
         }
         if (req.method === 'GET' && path === '/health') {
-          return send(200, JSON.stringify({ ok: true, ...stats, devices: store.list().length, rules: engine.rules.map((r) => r.name) }), 'application/json');
+          // Utan åtkomstkod avslöjas ingenting om nätverket eller reglerna.
+          const detail = req.headers.authorization && authorized(req);
+          const body = detail ? { ok: true, ...stats, devices: store.list().length, rules: engine.rules.map((r) => r.name) } : { ok: true };
+          return send(200, JSON.stringify(body), 'application/json');
         }
         if (req.method === 'GET' && path === '/api/vapid-key') {
+          if (!authorized(req)) return send(401, 'fel åtkomstkod\n');
           return send(200, JSON.stringify({ publicKey: config.notify.webpush?.publicKey ?? null }), 'application/json');
         }
         if (req.method === 'POST' && path.startsWith('/api/')) {

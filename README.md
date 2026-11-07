@@ -21,7 +21,17 @@ docker compose up -d --build
 ```
 
 1. **Router:** Administration → System Log → *Remote Log Server* = `asuslog.jtdev.se` (eller VPS:ens IP), port 514. Öppna 514/udp i brandväggen, helst bara från hemmets IP.
-2. **Caddy:** lägg till `asuslog.jtdev.se { reverse_proxy router-status:8080 }` (containern måste dela nätverk med Caddy) eller proxa till `127.0.0.1:8081`. Web Push kräver https.
+2. **Caddy (med lösenord framför hela sidan):**
+   ```
+   asuslog.jtdev.se {
+   	basicauth {
+   		jesper <bcrypt-hash från: docker exec proxy-caddy-1 caddy hash-password>
+   	}
+   	reverse_proxy router-status:8080
+   }
+   ```
+   Det ger två lås: Caddys lösenord först, sedan appens `ACCESS_TOKEN` (som låses i 15 minuter efter 5 felförsök). Utan inloggning visar `/health` bara `{"ok":true}`.
+   Äldre alternativ utan lösenord: lägg till `asuslog.jtdev.se { reverse_proxy router-status:8080 }` (containern måste dela nätverk med Caddy) eller proxa till `127.0.0.1:8081`. Web Push kräver https.
 3. **Mobilen:** öppna sidan, skriv åtkomstkoden, tryck *Aktivera notiser* och sedan *Skicka testnotis*. På iPhone måste sidan först läggas på hemskärmen.
 
 ## Regler
