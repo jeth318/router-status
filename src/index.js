@@ -30,7 +30,7 @@ async function handle(raw) {
   if (config.stdout) {
     console.log(
       JSON.stringify({
-        _time: entry.receivedAt.toISOString(),
+        time: entry.receivedAt.toISOString(),
         source: 'asus-router',
         level: entry.level,
         host: entry.hostname,
