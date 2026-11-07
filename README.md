@@ -24,7 +24,7 @@ docker compose up -d --build
 2. **Caddy (med lösenord framför hela sidan):**
    ```
    asuslog.jtdev.se {
-   	basicauth {
+   	basic_auth {
    		jesper <bcrypt-hash från: docker exec proxy-caddy-1 caddy hash-password>
    	}
    	reverse_proxy router-status:8080
