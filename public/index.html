@@ -21,11 +21,14 @@
 <button id="test">Skicka testnotis</button>
 <button id="off">Stäng av på den här enheten</button>
 <div id="msg"></div>
+<p id="env" style="font-size:12px;color:#888"></p>
 <script>
 const $ = (id) => document.getElementById(id);
 const say = (t) => ($('msg').textContent = t);
-$('token').value = localStorage.getItem('token') ?? '';
-const auth = () => { localStorage.setItem('token', $('token').value); return { 'Content-Type': 'application/json', 'X-Access-Token': $('token').value }; };
+document.getElementById('env').textContent = 'https: ' + window.isSecureContext + ' · standalone: ' + (navigator.standalone ?? matchMedia('(display-mode: standalone)').matches) + ' · push: ' + ('PushManager' in window);
+try { $('token').value = localStorage.getItem('token') ?? ''; } catch {}
+//.getItem('token') ?? '';
+const auth = () => { try { localStorage.setItem('token', $('token').value); } catch {} return { 'Content-Type': 'application/json', 'X-Access-Token': $('token').value }; };
 const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 async function reg() {
@@ -33,16 +36,30 @@ async function reg() {
   return navigator.serviceWorker.register('/sw.js');
 }
 $('on').onclick = async () => {
+  let step = 'start';
   try {
-    const r = await reg();
+    step = 'kontroll av webbläsarstöd';
+    if (!window.isSecureContext) throw new Error('sidan är inte https');
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Push stöds inte här. På iPhone krävs hemskärmsappen.');
+    step = 'notistillstånd'; // direkt vid knapptryck, annars nekar Safari
     if ((await Notification.requestPermission()) !== 'granted') return say('Notiser nekades i webbläsaren.');
+    step = 'hämta sw.js';
+    const swRes = await fetch('/sw.js');
+    if (!swRes.ok) throw new Error('sw.js svarade ' + swRes.status + ', undanta /sw.js från basic_auth i Caddy');
+    step = 'registrera service worker';
+    await navigator.serviceWorker.register('/sw.js');
+    const ready = await navigator.serviceWorker.ready;
+    step = 'hämta VAPID-nyckel';
     const keyRes = await fetch('/api/vapid-key', { headers: auth() });
     if (!keyRes.ok) return say('Fel åtkomstkod eller för många försök.');
     const { publicKey } = await keyRes.json();
-    const sub = await (await navigator.serviceWorker.ready).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) });
+    if (!publicKey) throw new Error('servern saknar VAPID-nycklar');
+    step = 'prenumerera hos push-tjänsten';
+    const sub = await ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) });
+    step = 'spara prenumeration';
     const res = await fetch('/api/subscribe', { method: 'POST', headers: auth(), body: JSON.stringify(sub) });
     say(res.ok ? 'Klart! Den här enheten får nu notiser.' : 'Fel: ' + (await res.text()));
-  } catch (e) { say(e.message); }
+  } catch (e) { say('Felade vid "' + step + '": ' + e.name + ': ' + e.message); }
 };
 $('test').onclick = async () => {
   const res = await fetch('/api/test', { method: 'POST', headers: auth() });
