@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>Router Status</title>
+<style>
+  body{font:16px system-ui;margin:0;padding:24px;max-width:480px;margin:auto;background:#fff;color:#111}
+  button,input{font:inherit;padding:12px;width:100%;box-sizing:border-box;margin:6px 0;border-radius:8px;border:1px solid #888}
+  button{background:#111;color:#fff;border:0}
+  #msg{margin-top:12px;color:#555;min-height:1.5em}
+  @media(prefers-color-scheme:dark){body{background:#111;color:#eee}input{background:#222;color:#eee}button{background:#eee;color:#111}}
+</style>
+</head>
+<body>
+<h1>Router Status</h1>
+<p>Aktivera pushnotiser för routerlarm på den här enheten. På iPhone: lägg först sidan på hemskärmen (Dela, Lägg till på hemskärmen) och öppna den därifrån.</p>
+<input id="token" type="password" placeholder="Åtkomstkod" autocomplete="current-password">
+<button id="on">Aktivera notiser</button>
+<button id="test">Skicka testnotis</button>
+<button id="off">Stäng av på den här enheten</button>
+<div id="msg"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const say = (t) => ($('msg').textContent = t);
+$('token').value = localStorage.getItem('token') ?? '';
+const auth = () => { localStorage.setItem('token', $('token').value); return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + $('token').value }; };
+const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+
+async function reg() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Push stöds inte här. På iPhone krävs hemskärmsappen.');
+  return navigator.serviceWorker.register('/sw.js');
+}
+$('on').onclick = async () => {
+  try {
+    const r = await reg();
+    if ((await Notification.requestPermission()) !== 'granted') return say('Notiser nekades i webbläsaren.');
+    const { publicKey } = await (await fetch('/api/vapid-key')).json();
+    const sub = await (await navigator.serviceWorker.ready).pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(publicKey) });
+    const res = await fetch('/api/subscribe', { method: 'POST', headers: auth(), body: JSON.stringify(sub) });
+    say(res.ok ? 'Klart! Den här enheten får nu notiser.' : 'Fel: ' + (await res.text()));
+  } catch (e) { say(e.message); }
+};
+$('test').onclick = async () => {
+  const res = await fetch('/api/test', { method: 'POST', headers: auth() });
+  say(res.ok ? 'Testnotis skickad.' : 'Fel: ' + (await res.text()));
+};
+$('off').onclick = async () => {
+  try {
+    const r = await navigator.serviceWorker.getRegistration();
+    const sub = await r?.pushManager.getSubscription();
+    if (sub) { await fetch('/api/unsubscribe', { method: 'POST', headers: auth(), body: JSON.stringify({ endpoint: sub.endpoint }) }); await sub.unsubscribe(); }
+    say('Avstängt på den här enheten.');
+  } catch (e) { say(e.message); }
+};
+</script>
+</body>
+</html>

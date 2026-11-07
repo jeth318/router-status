@@ -1,0 +1,24 @@
+{
+  "name": "router-status",
+  "version": "0.1.0",
+  "description": "Tar emot syslog från ASUS-routern, skickar pushnotiser vid valda events och vidarebefordrar hela loggen till logs.jtdev.se",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "vapid": "node src/vapid.js",
+    "test": "node --test test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeth318/router-status.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "web-push": "^4.0.0",
+    "yaml": "^2.9.1"
+  }
+}

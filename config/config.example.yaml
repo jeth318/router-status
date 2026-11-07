@@ -1,0 +1,122 @@
+# Kopiera till config/config.yaml och anpassa.
+# ${VAR} ersätts med miljövariabler (t.ex. från .env), ${VAR:-standard} med fallback.
+
+listen:
+  host: 0.0.0.0
+  udpPort: 5514        # Docker mappar 514/udp -> 5514 (routern skickar till 514)
+  tcpPort: null        # sätt t.ex. 5514 om något skickar syslog över TCP
+  httpPort: 8080       # webbsida för att aktivera push + /health
+
+# Push via Web Push (VAPID), samma teknik som cartripwatch. type: webpush | console
+# Generera nycklar med: npm run vapid
+notify:
+  type: ${NOTIFY_TYPE:-webpush}
+  webpush:
+    publicKey: ${VAPID_PUBLIC_KEY}
+    privateKey: ${VAPID_PRIVATE_KEY}
+    subject: ${VAPID_SUBJECT:-mailto:jesper.thornberg@me.com}
+    click: https://logs.jtdev.se   # trycker man på notisen öppnas loggen
+
+# Varje loggrad skrivs som JSON till stdout. På VPS:en samlar Vector in
+# containerloggar och skickar dem till VictoriaLogs, så hela routerloggen
+# hamnar på logs.jtdev.se utan extra konfiguration.
+stdout: true
+
+# Valfritt: skicka dessutom varje rad direkt någonstans.
+# type: none | victorialogs | syslog | loki | http
+forward:
+  type: ${FORWARD_TYPE:-none}
+  victorialogs:
+    url: ${VICTORIALOGS_URL:-http://victorialogs:9428}
+  syslog:
+    host: ${FORWARD_SYSLOG_HOST:-}
+    port: ${FORWARD_SYSLOG_PORT:-514}
+    protocol: udp      # udp | tcp
+  loki:
+    url: ${LOKI_URL:-}
+    username: ${LOKI_USERNAME:-}
+    password: ${LOKI_PASSWORD:-}
+    labels:
+      host: rt-ax58u
+  http:
+    url: ${FORWARD_HTTP_URL:-}
+
+# Regler. Matchas mot meddelandet (regex, skiftlägesokänsligt).
+#   match:    regex mot meddelandet; namngivna grupper (?<ip>...) kan användas i title/body som {ip}
+#   exclude:  regex som stoppar matchning
+#   program:  regex mot programnamnet (t.ex. dropbear, kernel, dnsmasq-dhcp)
+#   severity: högsta nivå som matchar (emerg..debug), t.ex. warning = warning och allvarligare
+#   priority: min | low | default | high | urgent
+#   cooldown: sekunder innan samma regel får skicka igen (standard 60)
+#   enabled:  false för att stänga av
+# I title/body finns även {message}, {program}, {hostname}, {level}, {raw}.
+rules:
+  - name: wan-nere
+    match: 'WAN(\(\d\))?_?Connection:.*(disconnect|link down|did not function|cable.*unplugged|lost)'
+    title: 'Internet nere'
+    body: '{message}'
+    priority: urgent
+    tags: [rotating_light]
+    cooldown: 300
+
+  - name: wan-uppe
+    match: 'WAN(\(\d\))?_?Connection:.*(restored|link up|connected)'
+    exclude: 'disconnect'
+    title: 'Internet tillbaka'
+    priority: default
+    tags: [white_check_mark]
+    cooldown: 60
+
+  - name: misslyckad-inloggning
+    match: '(abnormal logins?|login fail|Bad password attempt|authentication fail).*?(from (?<ip>[0-9a-fA-F.:]+))?'
+    title: 'Misslyckad inloggning på routern'
+    body: '{message}'
+    priority: high
+    tags: [warning, lock]
+    cooldown: 120
+
+  - name: lyckad-inloggning
+    match: '(Successful login|Password auth succeeded|login success)'
+    title: 'Någon loggade in på routern'
+    priority: default
+    tags: [key]
+    cooldown: 30
+
+  - name: omstart
+    match: '(syslogd started|klogd started|Linux version \d)'
+    title: 'Routern har startat om'
+    priority: high
+    tags: [arrows_counterclockwise]
+    cooldown: 600
+
+  - name: firmware
+    match: 'firmware.*(upgrade|update|available)'
+    title: 'Firmware-händelse'
+    priority: default
+    tags: [package]
+    cooldown: 3600
+
+  - name: aiprotection
+    match: '(AiProtection|Hacker attack|Infected device|Malicious site|BWDPI.*block)'
+    title: 'AiProtection larmade'
+    priority: high
+    tags: [shield]
+    cooldown: 300
+
+  - name: allvarliga-fel
+    severity: crit
+    title: 'Kritiskt fel i routern ({program})'
+    priority: high
+    tags: [boom]
+    cooldown: 300
+    match: '.'
+
+  # Ny enhet fick IP via DHCP. Kan bli pratigt, därför avstängd som standard.
+  - name: ny-dhcp-klient
+    enabled: false
+    program: '^dnsmasq-dhcp$'
+    match: 'DHCPACK\(\w+\) (?<ip>\S+) (?<mac>\S+) ?(?<name>\S*)'
+    title: 'Enhet anslöt: {name}'
+    body: '{ip} ({mac})'
+    priority: low
+    cooldown: 0
