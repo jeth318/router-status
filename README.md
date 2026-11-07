@@ -20,8 +20,8 @@ openssl rand -hex 24                                # -> ACCESS_TOKEN i .env
 docker compose up -d --build
 ```
 
-1. **Router:** Administration → System Log → *Remote Log Server* = VPS:ens IP, port 514. Öppna 514/udp i brandväggen, helst bara från hemmets IP.
-2. **Caddy:** lägg till t.ex. `router-status.jtdev.se { reverse_proxy router-status:8080 }` (containern måste dela nätverk med Caddy) eller proxa till `127.0.0.1:8081`. Web Push kräver https.
+1. **Router:** Administration → System Log → *Remote Log Server* = `asuslog.jtdev.se` (eller VPS:ens IP), port 514. Öppna 514/udp i brandväggen, helst bara från hemmets IP.
+2. **Caddy:** lägg till `asuslog.jtdev.se { reverse_proxy router-status:8080 }` (containern måste dela nätverk med Caddy) eller proxa till `127.0.0.1:8081`. Web Push kräver https.
 3. **Mobilen:** öppna sidan, skriv åtkomstkoden, tryck *Aktivera notiser* och sedan *Skicka testnotis*. På iPhone måste sidan först läggas på hemskärmen.
 
 ## Regler
